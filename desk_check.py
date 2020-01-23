@@ -82,6 +82,9 @@ class DeskChecker:
             if self.prev_line:
                 self.stack.append((self.prev_lineno, self.prev_line))
             if self.prev_line:
+                if self.history:
+                    last = self.history[-1]
+                    self.history.append(TraceData(self.prev_lineno-1, self.prev_line, *last[2:]))
                 self.history.append(TraceData(lineno-1, cur_line, name_dicts, self.prev_lineno-1, None, self.mock_builtins.outputs))
             self.prev_line = None
             self.prev_lineno = None
@@ -105,7 +108,7 @@ class DeskChecker:
 
         with self.mock_builtins:
             sys.settrace(self._trace)
-            exec(self.src)
+            exec(self.src, globals())
             sys.settrace(None)
 
         return self.history
