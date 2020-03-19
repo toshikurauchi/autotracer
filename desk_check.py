@@ -1,7 +1,7 @@
 import sys
 from collections import namedtuple
 import mock
-
+from copy import deepcopy
 
 # This documentation may be useful: https://docs.python.org/3/library/inspect.html
 '''
@@ -9,7 +9,8 @@ TODO
 Do not go inside functions that were not defined in the module
 '''
 
-TraceData = namedtuple('TraceData', 'line_i,line,name_dicts,call_line_i,retval,stdout')
+TraceData = namedtuple('TraceData',
+                       'line_i,line,name_dicts,call_line_i,retval,stdout')
 
 
 class DeskChecker:
@@ -31,7 +32,10 @@ class DeskChecker:
             functions = []
         f_name = frame.f_code.co_name
         if name_dicts:
-            name_dicts = {'{0},{1}'.format(f_name, k): v for k, v in name_dicts.items()}
+            name_dicts = {
+                '{0},{1}'.format(f_name, k): deepcopy(v)
+                for k, v in name_dicts.items()
+            }
         else:
             name_dicts = {}
         frame_dict = {}
@@ -44,12 +48,14 @@ class DeskChecker:
                 if callable(value):
                     functions.append(value)
                 else:
-                    frame_dict[v] = value
+                    frame_dict[v] = deepcopy(value)
         name_dicts[f_name] = frame_dict
 
         # We should stop when we reach the frame that contains this object (and consequently _check_function_name)
         if frame.f_back and frame.f_back.f_code.co_name != self._check_function_name:
-            return self._build_name_dicts(frame.f_back, name_dicts=name_dicts, functions=functions)
+            return self._build_name_dicts(frame.f_back,
+                                          name_dicts=name_dicts,
+                                          functions=functions)
         return name_dicts, functions
 
     def _is_def(self, f_name, cur_line):
@@ -69,13 +75,15 @@ class DeskChecker:
         except IndexError:
             call_line_i = None
         try:
-            cur_line = self.src_lines[lineno-1]
+            cur_line = self.src_lines[lineno - 1]
         except IndexError:
             cur_line = None
         name_dicts, functions = self._build_name_dicts(frame)
         if event == 'line':
             if self.prev_line:
-                self.history.append(TraceData(self.prev_lineno-1, self.prev_line, name_dicts, call_line_i, None, self.mock_builtins.outputs))
+                self.history.append(
+                    TraceData(self.prev_lineno - 1, self.prev_line, name_dicts,
+                              call_line_i, None, self.mock_builtins.outputs))
             self.prev_line = cur_line
             self.prev_lineno = lineno
         elif event == 'call' and not self._is_def(f_name, cur_line):
@@ -84,13 +92,20 @@ class DeskChecker:
             if self.prev_line:
                 if self.history:
                     last = self.history[-1]
-                    self.history.append(TraceData(self.prev_lineno-1, self.prev_line, *last[2:]))
-                self.history.append(TraceData(lineno-1, cur_line, name_dicts, self.prev_lineno-1, None, self.mock_builtins.outputs))
+                    self.history.append(
+                        TraceData(self.prev_lineno - 1, self.prev_line,
+                                  *last[2:]))
+                self.history.append(
+                    TraceData(lineno - 1, cur_line, name_dicts,
+                              self.prev_lineno - 1, None,
+                              self.mock_builtins.outputs))
             self.prev_line = None
             self.prev_lineno = None
         elif event == 'return':
             if self.prev_line:
-                self.history.append(TraceData(self.prev_lineno-1, self.prev_line, name_dicts, call_line_i, arg, self.mock_builtins.outputs))
+                self.history.append(
+                    TraceData(self.prev_lineno - 1, self.prev_line, name_dicts,
+                              call_line_i, arg, self.mock_builtins.outputs))
             try:
                 self.prev_lineno, self.prev_line = self.stack.pop()
             except IndexError:
